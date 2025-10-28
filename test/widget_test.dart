@@ -5,26 +5,31 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+// ignore_for_file: unused_import
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:simulacion_ley_newton/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Carga tabs y controles básicos', (WidgetTester tester) async {
+    // Desactiva animaciones para que pumpAndSettle no se quede esperando
+    await tester.pumpWidget(const TickerMode(enabled: false, child: MyApp()));
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Debe mostrar el título general
+    expect(find.text('Simulador de Enfriamiento'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // En la pestaña Ley debe haber campos T0 y k
+    expect(find.textContaining('T₀'), findsWidgets);
+    expect(find.textContaining('k'), findsWidgets);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Cambiar a pestaña Servidor
+  await tester.tap(find.text('Servidor'));
+  await tester.pump(const Duration(milliseconds: 100));
+
+    // Debe mostrar P, C y hA
+    expect(find.textContaining('P (W)'), findsOneWidget);
+    expect(find.textContaining('C (J/°C)'), findsOneWidget);
+    expect(find.textContaining('hA (W/°C)'), findsOneWidget);
   });
 }
