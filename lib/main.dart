@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 
 void main() => runApp(const MyApp());
 
@@ -22,7 +23,7 @@ double _niceStep(double span) {
   return nice * pow10;
 }
 
-FlTitlesData _titles(double spanX, double minY, double maxY) {
+FlTitlesData _titles(double spanX, double minY, double maxY, {double xMin = 0, required double xMax}) {
   final ySpan = (maxY - minY).abs();
   final xStep = _niceStep(spanX);
   final yStep = _niceStep(ySpan);
@@ -33,17 +34,32 @@ FlTitlesData _titles(double spanX, double minY, double maxY) {
     leftTitles: AxisTitles(
       sideTitles: SideTitles(
         showTitles: true,
-        reservedSize: 40,
+        reservedSize: 62, // más espacio a la izquierda
         interval: yStep,
-        getTitlesWidget: (v, meta) => Text(_fmt(v, yStep), style: const TextStyle(fontSize: 11)),
+        getTitlesWidget: (v, meta) {
+          // Evitar etiquetas pegadas al borde superior/inferior y duplicadas con el último tick
+          final isNearMin = (v - minY).abs() < yStep * 0.4;
+          final isNearMax = (maxY - v).abs() < yStep * 0.4;
+          if (isNearMin || isNearMax) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(_fmt(v, yStep), style: const TextStyle(fontSize: 12)),
+            ),
+          );
+        },
       ),
     ),
     bottomTitles: AxisTitles(
       sideTitles: SideTitles(
         showTitles: true,
-        reservedSize: 28,
+        reservedSize: 36,
         interval: xStep,
-        getTitlesWidget: (v, meta) => Text(_fmt(v, xStep), style: const TextStyle(fontSize: 11)),
+        getTitlesWidget: (v, meta) {
+          if (v < xMin - 1e-6 || v > xMax + 1e-6) return const SizedBox.shrink();
+          return Text(_fmt(v, xStep), style: const TextStyle(fontSize: 12));
+        },
       ),
     ),
   );
@@ -86,6 +102,67 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+}
+
+// Tarjeta reutilizable para mostrar fórmulas con LaTeX
+class FormulaCard extends StatelessWidget {
+  const FormulaCard({super.key, required this.title, required this.lines});
+  final String title;
+  final List<Widget> lines;
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1.0,
+      margin: const EdgeInsets.only(top: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.calculate, size: 18),
+              const SizedBox(width: 8),
+              Text(title, style: Theme.of(context).textTheme.titleMedium),
+            ]),
+            const SizedBox(height: 8),
+            ...lines.map((w) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: w)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Campo numérico compacto para insertar dentro de las fórmulas
+class InlineNumField extends StatelessWidget {
+  const InlineNumField({
+    super.key,
+    required this.label,
+    required this.controller,
+    required this.onSubmitted,
+    this.width = 110,
+  });
+  final String label;
+  final TextEditingController controller;
+  final VoidCallback onSubmitted;
+  final double width;
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          isDense: true,
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        onSubmitted: (_) => onSubmitted(),
+      ),
+    );
+  }
 }
 
 // 1) Apartado Ley de Enfriamiento de Newton (sin servidor gráfico)
@@ -191,7 +268,7 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
         ]),
         const SizedBox(height: 12),
         SizedBox(
-          height: 170,
+          height: 200,
           child: Card(
             elevation: 1.5,
             margin: EdgeInsets.zero,
@@ -199,9 +276,11 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8,8,12,8),
               child: LineChart(LineChartData(
-                minX: 0, maxX: duration, minY: minY, maxY: maxY,
+                minX: -(math.max(0.5, duration * 0.04)),
+                maxX: duration + math.max(0.5, duration * 0.04),
+                minY: minY, maxY: maxY,
                 gridData: const FlGridData(show: true),
-                titlesData: _titles(duration, minY, maxY),
+                titlesData: _titles(duration, minY, maxY, xMin: 0, xMax: duration),
                 borderData: FlBorderData(show: true, border: const Border.symmetric(horizontal: BorderSide(color: Color(0x22000000)), vertical: BorderSide(color: Color(0x22000000)))),
                 lineTouchData: LineTouchData(
                   handleBuiltInTouches: true,
@@ -229,15 +308,15 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
                   )
                 ],
                 extraLinesData: ExtraLinesData(horizontalLines: [
-                  HorizontalLine(y: ta, color: Colors.teal, dashArray: const [6,4], label: HorizontalLineLabel(show: true, labelResolver: (_) => 'Tₐ ${ta.toStringAsFixed(1)}°C'))
+              HorizontalLine(y: ta, color: Colors.teal, dashArray: const [6,4], label: HorizontalLineLabel(show: true, labelResolver: (_) => 'Tₐ ${ta.toStringAsFixed(1)}°C'))
                 ], verticalLines: [
-                  VerticalLine(x: tMarker, color: Colors.orange, dashArray: const [6,4], label: VerticalLineLabel(show: true, labelResolver: (_) => 't = ${tMarker.toStringAsFixed(1)} min'))
+            VerticalLine(x: tMarker, color: Colors.orange, dashArray: const [6,4], label: VerticalLineLabel(show: true, alignment: Alignment.topLeft, labelResolver: (_) => 't = ${tMarker.toStringAsFixed(1)} min'))
                 , if (tau <= duration)
-                   VerticalLine(x: tau, color: Colors.deepPurpleAccent, dashArray: const [4,4], label: VerticalLineLabel(show: true, labelResolver: (_)=>'τ'))
+             VerticalLine(x: tau, color: Colors.deepPurpleAccent, dashArray: const [4,4], label: VerticalLineLabel(show: true, alignment: Alignment.topCenter, labelResolver: (_)=>'τ'))
                 , if (tHalf <= duration)
-                   VerticalLine(x: tHalf, color: Colors.pinkAccent, dashArray: const [4,4], label: VerticalLineLabel(show: true, labelResolver: (_)=>'t½'))
+             VerticalLine(x: tHalf, color: Colors.pinkAccent, dashArray: const [4,4], label: VerticalLineLabel(show: true, alignment: Alignment.topCenter, labelResolver: (_)=>'t½'))
                 , if (t95 <= duration)
-                   VerticalLine(x: t95, color: Colors.greenAccent, dashArray: const [4,4], label: VerticalLineLabel(show: true, labelResolver: (_)=>'95%'))
+             VerticalLine(x: t95, color: Colors.greenAccent, dashArray: const [4,4], label: VerticalLineLabel(show: true, alignment: Alignment.topCenter, labelResolver: (_)=>'95%'))
                 ]),
               )),
             ),
@@ -275,6 +354,27 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
             setState(()=>tMarker=v);
           }))
         ]),
+        // Fórmulas (aprovecha el espacio en blanco)
+        FormulaCard(
+          title: 'Fórmulas y ecuaciones',
+          lines: [
+            Math.tex(r"\frac{dT}{dt} = -k\,(T- T_a)", textStyle: const TextStyle(fontSize: 16)),
+            Math.tex(r"T(t) = T_a + (T_0 - T_a)\,e^{-kt}", textStyle: const TextStyle(fontSize: 16)),
+            Math.tex(r"\tau = \frac{1}{k},\quad t_{1/2}=\frac{\ln 2}{k},\quad t_{95\%}=\frac{\ln 20}{k}", textStyle: const TextStyle(fontSize: 16)),
+            const Divider(),
+            // Versión con tus valores actuales (sólo números, sin fracciones para evitar escapes)
+            Math.tex(
+              "T(t) = ${ta.toStringAsFixed(2)} + (${t0.toStringAsFixed(2)} - ${ta.toStringAsFixed(2)}) e^{-${k.toStringAsFixed(3)} t}",
+              textStyle: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              InlineNumField(label: 'T₀ (°C)', controller: t0C, onSubmitted: apply),
+              InlineNumField(label: 'Tₐ (°C)', controller: taC, onSubmitted: apply),
+              InlineNumField(label: 'k (1/min)', controller: kC, onSubmitted: apply),
+            ]),
+          ],
+        ),
         ]),
       ),
     );
@@ -368,7 +468,8 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
           final chartHeight = isWide ? 190.0 : 160.0;
           final left = Expanded(
             flex: 2,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child: SingleChildScrollView(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Wrap(spacing: 12, runSpacing: 12, children: [
                 numField('T₀ (°C)', t0C), numField('Tₐ (°C)', taC), numField('P (W)', pC), numField('C (J/°C)', cC), numField('hA (W/°C)', haC), numField('Duración (min)', dC),
                 FilledButton.icon(onPressed: apply, icon: const Icon(Icons.check), label: const Text('Aplicar')),
@@ -376,7 +477,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
               ]),
               const SizedBox(height: 12),
               SizedBox(
-                height: chartHeight,
+                height: chartHeight + 20,
                 child: Card(
                   elevation: 1.5,
                   margin: EdgeInsets.zero,
@@ -384,9 +485,11 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(8,8,12,8),
                     child: LineChart(LineChartData(
-                      minX: 0, maxX: duration, minY: minY, maxY: maxY,
+                      minX: -(math.max(0.5, duration * 0.04)),
+                      maxX: duration + math.max(0.5, duration * 0.04),
+                      minY: minY, maxY: maxY,
                       gridData: const FlGridData(show: true),
-                      titlesData: _titles(duration, minY, maxY),
+                      titlesData: _titles(duration, minY, maxY, xMin: 0, xMax: duration),
                       borderData: FlBorderData(show: true, border: const Border.symmetric(horizontal: BorderSide(color: Color(0x22000000)), vertical: BorderSide(color: Color(0x22000000)))),
                       lineTouchData: LineTouchData(
                         handleBuiltInTouches: true,
@@ -448,7 +551,30 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
               Row(children: [
                 Expanded(child: Slider(value: tMarker.clamp(0, duration), min: 0, max: duration, onChanged: (v)=>setState(()=>tMarker=v)))
               ]),
+              FormulaCard(
+                title: 'Fórmulas y ecuaciones',
+                lines: [
+                  Math.tex(r"C\,\frac{dT}{dt} = -hA\,(T-T_a) + P", textStyle: const TextStyle(fontSize: 16)),
+                  Math.tex(r"\text{Definimos } k=\frac{hA}{C},\; q=\frac{P}{C}\;\Rightarrow\; \frac{dT}{dt} = -k(T-T_a)+q", textStyle: const TextStyle(fontSize: 16)),
+                  Math.tex(r"T(t) = T_a + \Big(T_0 - T_a - \frac{q}{k}\Big)e^{-kt} + \frac{q}{k}", textStyle: const TextStyle(fontSize: 16)),
+                  Math.tex(r"T_{\infty} = T_a + \frac{P}{hA}", textStyle: const TextStyle(fontSize: 16)),
+                  const Divider(),
+                  Math.tex(
+                    "T(t) = ${ta.toStringAsFixed(2)} + (${t0.toStringAsFixed(2)} - ${ta.toStringAsFixed(2)} - ${(q/(k==0?1:k)).toStringAsFixed(2)}) e^{-${k.toStringAsFixed(3)} t} + ${(q/(k==0?1:k)).toStringAsFixed(2)}",
+                    textStyle: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    InlineNumField(label: 'T₀ (°C)', controller: t0C, onSubmitted: apply),
+                    InlineNumField(label: 'Tₐ (°C)', controller: taC, onSubmitted: apply),
+                    InlineNumField(label: 'Potencia (W)', controller: pC, onSubmitted: apply),
+                    InlineNumField(label: 'Capacidad térmica (J/°C)', controller: cC, onSubmitted: apply),
+                    InlineNumField(label: 'Coef. hA', controller: haC, onSubmitted: apply),
+                  ]),
+                ],
+              ),
             ]),
+            ),
           );
           final rightContent = DataCenterView(
             ambient: ta,
@@ -468,7 +594,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
               ]),
               const SizedBox(height: 12),
               SizedBox(
-                height: chartHeight,
+                height: chartHeight + 20,
                 child: Card(
                   elevation: 1.5,
                   margin: EdgeInsets.zero,
@@ -476,9 +602,11 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(8,8,12,8),
                     child: LineChart(LineChartData(
-                      minX: 0, maxX: duration, minY: minY, maxY: maxY,
+                      minX: -(math.max(0.5, duration * 0.04)),
+                      maxX: duration + math.max(0.5, duration * 0.04),
+                      minY: minY, maxY: maxY,
                       gridData: const FlGridData(show: true),
-                      titlesData: _titles(duration, minY, maxY),
+                      titlesData: _titles(duration, minY, maxY, xMin: 0, xMax: duration),
                       borderData: FlBorderData(show: true, border: const Border.symmetric(horizontal: BorderSide(color: Color(0x22000000)), vertical: BorderSide(color: Color(0x22000000)))),
                       lineTouchData: LineTouchData(
                         handleBuiltInTouches: true,
@@ -540,6 +668,28 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
               Row(children: [
                 Slider(value: tMarker.clamp(0, duration), min: 0, max: duration, onChanged: (v)=>setState(()=>tMarker=v))
               ]),
+              FormulaCard(
+                title: 'Fórmulas y ecuaciones',
+                lines: [
+                  Math.tex(r"C\,\frac{dT}{dt} = -hA\,(T-T_a) + P", textStyle: const TextStyle(fontSize: 16)),
+                  Math.tex(r"k=\frac{hA}{C},\; q=\frac{P}{C}\;\Rightarrow\; \frac{dT}{dt} = -k(T-T_a)+q", textStyle: const TextStyle(fontSize: 16)),
+                  Math.tex(r"T(t) = T_a + \Big(T_0 - T_a - \frac{q}{k}\Big)e^{-kt} + \frac{q}{k}", textStyle: const TextStyle(fontSize: 16)),
+                  Math.tex(r"T_{\infty} = T_a + \frac{P}{hA}", textStyle: const TextStyle(fontSize: 16)),
+                  const Divider(),
+                  Math.tex(
+                    "T(t) = ${ta.toStringAsFixed(2)} + (${t0.toStringAsFixed(2)} - ${ta.toStringAsFixed(2)} - ${(q/(k==0?1:k)).toStringAsFixed(2)}) e^{-${k.toStringAsFixed(3)} t} + ${(q/(k==0?1:k)).toStringAsFixed(2)}",
+                    textStyle: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    InlineNumField(label: 'T₀ (°C)', controller: t0C, onSubmitted: apply),
+                    InlineNumField(label: 'Tₐ (°C)', controller: taC, onSubmitted: apply),
+                    InlineNumField(label: 'Potencia (W)', controller: pC, onSubmitted: apply),
+                    InlineNumField(label: 'Capacidad térmica (J/°C)', controller: cC, onSubmitted: apply),
+                    InlineNumField(label: 'Coef. hA', controller: haC, onSubmitted: apply),
+                  ]),
+                ],
+              ),
             ]);
             return SingleChildScrollView(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [leftSmall, const SizedBox(height: 12), SizedBox(height: 320, child: rightContent)]),
