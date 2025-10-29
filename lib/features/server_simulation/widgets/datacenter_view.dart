@@ -72,7 +72,7 @@ class DataCenterView extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(UIConstants.defaultBorderRadius),
       ),
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(UIConstants.defaultPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

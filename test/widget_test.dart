@@ -9,12 +9,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:simulacion_ley_newton/main.dart';
+import 'package:simulacion_ley_newton/app.dart';
 
 void main() {
   testWidgets('Carga tabs y controles básicos', (WidgetTester tester) async {
     // Desactiva animaciones para que pumpAndSettle no se quede esperando
-    await tester.pumpWidget(const TickerMode(enabled: false, child: MyApp()));
+    await tester.pumpWidget(const TickerMode(enabled: false, child: MainApp()));
 
     // Debe mostrar el título general
     expect(find.text('Simulador de Enfriamiento'), findsOneWidget);
@@ -24,8 +24,8 @@ void main() {
     expect(find.textContaining('k'), findsWidgets);
 
     // Cambiar a pestaña Servidor
-  await tester.tap(find.text('Servidor'));
-  await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('Servidor'));
+    await tester.pump(const Duration(milliseconds: 100));
 
     // Debe mostrar P, C y hA
     expect(find.textContaining('P (W)'), findsOneWidget);
