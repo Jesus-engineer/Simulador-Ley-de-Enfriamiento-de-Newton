@@ -8,6 +8,7 @@ import '../../shared/utils.dart';
 import '../../shared/widgets/formula_widgets.dart';
 import '../../shared/widgets/chart_titles.dart';
 import 'widgets/datacenter_view.dart';
+import 'widgets/server_rack_widget.dart';
 
 class ServerExamplePage extends StatefulWidget {
   const ServerExamplePage({super.key});
@@ -63,9 +64,9 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
 
   /// Generates data points for temperature curve
   List<FlSpot> series(int n) => List.generate(n + 1, (i) {
-    final x = duration * i / n;
-    return FlSpot(x, temp(x));
-  });
+        final x = duration * i / n;
+        return FlSpot(x, temp(x));
+      });
 
   /// Applies new values from input fields
   void apply() {
@@ -128,10 +129,10 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
     final currentT = temp(tMarker);
     final minY =
         [temp(0), temp(duration), ta, steady].reduce((a, b) => math.min(a, b)) -
-        ChartConstants.chartPadding;
+            ChartConstants.chartPadding;
     final maxY =
         [temp(0), temp(duration), ta, steady].reduce((a, b) => math.max(a, b)) +
-        ChartConstants.chartPadding;
+            ChartConstants.chartPadding;
 
     return Padding(
       padding: const EdgeInsets.all(UIConstants.defaultPadding),
@@ -271,8 +272,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
                 0.5,
                 duration * ChartConstants.chartMarginPercent,
               )),
-              maxX:
-                  duration +
+              maxX: duration +
                   math.max(0.5, duration * ChartConstants.chartMarginPercent),
               minY: minY,
               maxY: maxY,
