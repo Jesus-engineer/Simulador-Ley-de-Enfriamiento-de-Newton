@@ -28,7 +28,6 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
   bool _running = false;
   double _speed = TemperatureConstants.defaultSimulationSpeed;
   Timer? _timer;
-  bool _loop = false;
 
   // Controllers for input fields
   final t0C = TextEditingController(
@@ -66,15 +65,10 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
 
   void _tick() {
     setState(() {
-      tMarker =
-          (tMarker + _speed * TemperatureConstants.simulationTickInterval);
+      tMarker = (tMarker + _speed * TemperatureConstants.simulationTickInterval);
       if (tMarker >= duration) {
-        if (_loop) {
-          tMarker = 0;
-        } else {
-          tMarker = duration;
-          _stop();
-        }
+        tMarker = duration;
+        _stop();
       }
     });
   }
@@ -382,13 +376,7 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
           icon: const Icon(Icons.replay),
           label: const Text('Reiniciar'),
         ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Loop'),
-            Switch(value: _loop, onChanged: (v) => setState(() => _loop = v)),
-          ],
-        ),
+
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
