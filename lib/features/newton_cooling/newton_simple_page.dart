@@ -7,6 +7,7 @@ import '../../shared/constants.dart';
 import '../../shared/utils.dart';
 import '../../shared/widgets/formula_widgets.dart';
 import '../../shared/widgets/chart_titles.dart';
+import '../../shared/widgets/section_card.dart';
 
 class NewtonSimplePage extends StatefulWidget {
   const NewtonSimplePage({super.key});
@@ -28,6 +29,8 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
   bool _running = false;
   double _speed = TemperatureConstants.defaultSimulationSpeed;
   Timer? _timer;
+  // Para sincronizar la gráfica en pantalla completa con el movimiento
+  final ValueNotifier<double> _markerNotifier = ValueNotifier<double>(0);
 
   // Controllers for input fields
   final t0C = TextEditingController(
@@ -52,13 +55,34 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
     return FlSpot(x, temp(x));
   });
 
-  /// Applies new values from input fields
+  /// Applies new values from input fields with validation
   void apply() {
+    String norm(String s) => s.replaceAll(',', '.').trim();
+    double? p(String s) => double.tryParse(norm(s));
+
+    final vT0 = p(t0C.text);
+    final vTa = p(taC.text);
+    final vK = p(kC.text);
+    final vDur = p(dC.text);
+
+    if (vT0 == null || vTa == null || vK == null || vDur == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Completa todos los campos con números válidos.')),
+      );
+      return;
+    }
+    if (vK <= 0 || vDur <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('k y la duración deben ser mayores que 0.')),
+      );
+      return;
+    }
+
     setState(() {
-      t0 = MathUtils.parseNumericInput(t0C.text, t0);
-      ta = MathUtils.parseNumericInput(taC.text, ta);
-      k = MathUtils.parseNumericInput(kC.text, k).abs();
-      duration = MathUtils.parseNumericInput(dC.text, duration).clamp(1, 1e6);
+      t0 = vT0;
+      ta = vTa;
+      k = vK;
+      duration = vDur.clamp(1, 1e6);
       if (tMarker > duration) tMarker = duration;
     });
   }
@@ -70,6 +94,7 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
         tMarker = duration;
         _stop();
       }
+      _markerNotifier.value = tMarker;
     });
   }
 
@@ -92,7 +117,10 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
 
   void _reset() {
     _stop();
-    setState(() => tMarker = 0);
+    setState(() {
+      tMarker = 0;
+      _markerNotifier.value = tMarker;
+    });
   }
 
   @override
@@ -110,9 +138,7 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
     final maxY =
         [temp(0), temp(duration), ta].reduce(math.max) +
         ChartConstants.chartPadding;
-    final tau = 1.0 / (k == 0 ? 1e-9 : k);
-    final tHalf = math.ln2 / (k == 0 ? 1e-9 : k);
-    final t95 = math.log(20) / (k == 0 ? 1e-9 : k);
+    // métricas internas opcionales removidas del UI
 
     return Padding(
       padding: const EdgeInsets.all(UIConstants.defaultPadding),
@@ -121,10 +147,8 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildInputFields(),
-            const SizedBox(height: UIConstants.defaultSpacing),
-            _buildMetrics(tau, tHalf, t95),
             const SizedBox(height: 12),
-            _buildChart(currentT, minY, maxY, tau, tHalf, t95),
+            _buildChart(currentT, minY, maxY),
             const SizedBox(height: UIConstants.defaultSpacing),
             _buildControls(currentT),
             const SizedBox(height: UIConstants.defaultSpacing),
@@ -137,55 +161,68 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
   }
 
   Widget _buildInputFields() {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _numField('T₀ (°C)', t0C),
-        _numField('Tₐ (°C)', taC),
-        _numField('k (1/min)', kC),
-        _numField('Duración (min)', dC),
+    return SectionCard(
+      title: 'Parámetros y presets',
+      icon: Icons.thermostat,
+      actions: [
+        IconButton(
+          tooltip: 'Definiciones',
+          icon: const Icon(Icons.info_outline),
+          onPressed: () => _showNewtonInfo(context),
+        ),
         FilledButton.icon(
           onPressed: apply,
           icon: const Icon(Icons.check),
           label: const Text('Aplicar'),
         ),
       ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _numField('T₀ (°C)', t0C),
+              _numField('Tₐ (°C)', taC),
+              _numField('k (1/min)', kC),
+              _numField('Duración (min)', dC),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: UIConstants.defaultSpacing,
+            runSpacing: UIConstants.defaultSpacing,
+            children: [
+              _buildPresetButton(
+                'Bebida',
+                Icons.local_cafe,
+                TemperatureConstants.presets['drink']!,
+              ),
+              _buildPresetButton(
+                'CPU',
+                Icons.memory,
+                TemperatureConstants.presets['cpu']!,
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.ac_unit, size: 16),
+                label: const Text('Exterior frío'),
+                onPressed: () {
+                  setState(() {
+                    ta = 5; // ambiente frío fijo
+                    taC.text = ta.toString();
+                    tMarker = 0;
+                  });
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildMetrics(double tau, double tHalf, double t95) {
-    return Wrap(
-      spacing: UIConstants.defaultSpacing,
-      runSpacing: UIConstants.defaultSpacing,
-      children: [
-        Chip(label: Text('τ ≈ ${tau.toStringAsFixed(2)} min')),
-        Chip(label: Text('t½ ≈ ${tHalf.toStringAsFixed(2)} min')),
-        Chip(label: Text('t95% ≈ ${t95.toStringAsFixed(2)} min')),
-        _buildPresetButton(
-          'Bebida',
-          Icons.local_cafe,
-          TemperatureConstants.presets['drink']!,
-        ),
-        _buildPresetButton(
-          'CPU',
-          Icons.memory,
-          TemperatureConstants.presets['cpu']!,
-        ),
-        ActionChip(
-          avatar: const Icon(Icons.ac_unit, size: 16),
-          label: const Text('Exterior frío'),
-          onPressed: () {
-            setState(() {
-              ta = TemperatureConstants.presets['drink']!['ta']!;
-              taC.text = ta.toString();
-              tMarker = 0;
-            });
-          },
-        ),
-      ],
-    );
-  }
+  
 
   Widget _buildPresetButton(
     String label,
@@ -215,91 +252,111 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
     double currentT,
     double minY,
     double maxY,
-    double tau,
-    double tHalf,
-    double t95,
   ) {
-    return SizedBox(
-      height: ChartConstants.defaultHeight,
-      child: Card(
-        elevation: UIConstants.defaultElevation,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(UIConstants.defaultBorderRadius),
+    final data = LineChartData(
+      minX: -(math.max(0.5, duration * ChartConstants.chartMarginPercent)),
+      maxX: duration + math.max(0.5, duration * ChartConstants.chartMarginPercent),
+      minY: minY,
+      maxY: maxY,
+      gridData: const FlGridData(show: true),
+      titlesData: ChartTitlesConfig.create(
+        duration,
+        minY,
+        maxY,
+        xMin: 0,
+        xMax: duration,
+        xAxisLabel: 'Tiempo [min]',
+        yAxisLabel: 'Temperatura [°C]',
+      ),
+      borderData: FlBorderData(
+        show: true,
+        border: const Border.symmetric(
+          horizontal: BorderSide(color: Color(0x22000000)),
+          vertical: BorderSide(color: Color(0x22000000)),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-          child: LineChart(
-            LineChartData(
-              minX: -(math.max(
-                0.5,
-                duration * ChartConstants.chartMarginPercent,
-              )),
-              maxX:
-                  duration +
-                  math.max(0.5, duration * ChartConstants.chartMarginPercent),
-              minY: minY,
-              maxY: maxY,
-              gridData: const FlGridData(show: true),
-              titlesData: ChartTitlesConfig.create(
-                duration,
-                minY,
-                maxY,
-                xMin: 0,
-                xMax: duration,
-              ),
-              borderData: FlBorderData(
-                show: true,
-                border: const Border.symmetric(
-                  horizontal: BorderSide(color: Color(0x22000000)),
-                  vertical: BorderSide(color: Color(0x22000000)),
-                ),
-              ),
-              lineTouchData: LineTouchData(
-                handleBuiltInTouches: true,
-                touchTooltipData: LineTouchTooltipData(
-                  getTooltipItems: (spots) => spots
-                      .map(
-                        (s) => LineTooltipItem(
-                          't = ${s.x.toStringAsFixed(2)} min\nT = ${s.y.toStringAsFixed(2)} °C',
-                          const TextStyle(
-                            color: Colors.white,
-                            fontSize: UIConstants.defaultFontSize,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: series(TemperatureConstants.chartDataPoints),
-                  isCurved: true,
-                  color: Colors.indigo,
-                  barWidth: 3,
-                  dotData: const FlDotData(show: true),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.indigo.withOpacity(0.25),
-                        Colors.indigo.withOpacity(0.05),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
+      ),
+      lineTouchData: LineTouchData(
+        handleBuiltInTouches: true,
+        touchTooltipData: LineTouchTooltipData(
+          getTooltipItems: (spots) => spots
+              .map(
+                (s) => LineTooltipItem(
+                  't = ${s.x.toStringAsFixed(2)} min\nT = ${s.y.toStringAsFixed(2)} °C',
+                  const TextStyle(
+                    color: Colors.white,
+                    fontSize: UIConstants.defaultFontSize,
                   ),
                 ),
+              )
+              .toList(),
+        ),
+        touchCallback: (event, response) {
+          if (response?.lineBarSpots != null && response!.lineBarSpots!.isNotEmpty) {
+            final x = response.lineBarSpots!.first.x;
+            setState(() {
+              tMarker = x.clamp(0, duration);
+              _markerNotifier.value = tMarker;
+            });
+          }
+        },
+      ),
+      lineBarsData: [
+        LineChartBarData(
+          spots: series(TemperatureConstants.chartDataPoints),
+          isCurved: true,
+          color: Colors.indigo,
+          barWidth: 3,
+          dotData: const FlDotData(show: true),
+          belowBarData: BarAreaData(
+            show: true,
+            gradient: LinearGradient(
+              colors: [
+                        Colors.indigo.withValues(alpha: 0.25),
+                        Colors.indigo.withValues(alpha: 0.05),
               ],
-              extraLinesData: _buildExtraLines(tau, tHalf, t95),
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
           ),
         ),
+      ],
+      extraLinesData: _buildExtraLines(),
+    );
+
+    return SizedBox(
+      height: 240,
+      child: Stack(
+        children: [
+          Card(
+            elevation: UIConstants.defaultElevation,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(UIConstants.defaultBorderRadius),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+              child: LineChart(data),
+            ),
+          ),
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Tooltip(
+              message: 'Ver en grande',
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(backgroundColor: Colors.white.withValues(alpha: 0.7)),
+                onPressed: () => _openFullChart(minY: minY, maxY: maxY),
+                icon: const Icon(Icons.fullscreen, size: 20),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  ExtraLinesData _buildExtraLines(double tau, double tHalf, double t95) {
+  ExtraLinesData _buildExtraLines() {
     return ExtraLinesData(
       horizontalLines: [
         HorizontalLine(
@@ -323,39 +380,6 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
             labelResolver: (_) => 't = ${tMarker.toStringAsFixed(1)} min',
           ),
         ),
-        if (tau <= duration)
-          VerticalLine(
-            x: tau,
-            color: Colors.deepPurpleAccent,
-            dashArray: const [4, 4],
-            label: VerticalLineLabel(
-              show: true,
-              alignment: Alignment.topCenter,
-              labelResolver: (_) => 'τ',
-            ),
-          ),
-        if (tHalf <= duration)
-          VerticalLine(
-            x: tHalf,
-            color: Colors.pinkAccent,
-            dashArray: const [4, 4],
-            label: VerticalLineLabel(
-              show: true,
-              alignment: Alignment.topCenter,
-              labelResolver: (_) => 't½',
-            ),
-          ),
-        if (t95 <= duration)
-          VerticalLine(
-            x: t95,
-            color: Colors.greenAccent,
-            dashArray: const [4, 4],
-            label: VerticalLineLabel(
-              show: true,
-              alignment: Alignment.topCenter,
-              labelResolver: (_) => '95%',
-            ),
-          ),
       ],
     );
   }
@@ -409,10 +433,142 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
             value: tMarker.clamp(0, duration),
             min: 0,
             max: duration,
-            onChanged: (v) => setState(() => tMarker = v),
+            onChanged: (v) => setState(() {
+              tMarker = v;
+              _markerNotifier.value = tMarker;
+            }),
           ),
         ),
       ],
+    );
+  }
+
+  void _openFullChart({required double minY, required double maxY}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          top: false,
+          child: SizedBox(
+            height: MediaQuery.of(ctx).size.height * 0.9,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text('Evolución de temperatura',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        icon: const Icon(Icons.close),
+                      )
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 16, 16),
+                    child: Card(
+                      elevation: UIConstants.defaultElevation,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(UIConstants.defaultBorderRadius),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 16, 12),
+                        child: ValueListenableBuilder<double>(
+                          valueListenable: _markerNotifier,
+                          builder: (_, __, ___) {
+                            // Reutilizamos la misma configuración, que depende de tMarker actual
+                            final data = LineChartData(
+                              minX: -(math.max(0.5, duration * ChartConstants.chartMarginPercent)),
+                              maxX: duration + math.max(0.5, duration * ChartConstants.chartMarginPercent),
+                              minY: minY,
+                              maxY: maxY,
+                              gridData: const FlGridData(show: true),
+                              titlesData: ChartTitlesConfig.create(
+                                duration,
+                                minY,
+                                maxY,
+                                xMin: 0,
+                                xMax: duration,
+                                xAxisLabel: 'Tiempo [min]',
+                                yAxisLabel: 'Temperatura [°C]',
+                              ),
+                              borderData: FlBorderData(
+                                show: true,
+                                border: const Border.symmetric(
+                                  horizontal: BorderSide(color: Color(0x22000000)),
+                                  vertical: BorderSide(color: Color(0x22000000)),
+                                ),
+                              ),
+                              lineTouchData: LineTouchData(
+                                handleBuiltInTouches: true,
+                                touchTooltipData: LineTouchTooltipData(
+                                  getTooltipItems: (spots) => spots
+                                      .map(
+                                        (s) => LineTooltipItem(
+                                          't = ${s.x.toStringAsFixed(2)} min\nT = ${s.y.toStringAsFixed(2)} °C',
+                                          const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: UIConstants.defaultFontSize,
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                                touchCallback: (event, response) {
+                                  if (response?.lineBarSpots != null && response!.lineBarSpots!.isNotEmpty) {
+                                    final x = response.lineBarSpots!.first.x;
+                                    setState(() {
+                                      tMarker = x.clamp(0, duration);
+                                      _markerNotifier.value = tMarker;
+                                    });
+                                  }
+                                },
+                              ),
+                              lineBarsData: [
+                                LineChartBarData(
+                                  spots: series(TemperatureConstants.chartDataPoints),
+                                  isCurved: true,
+                                  color: Colors.indigo,
+                                  barWidth: 3,
+                                  dotData: const FlDotData(show: true),
+                                  belowBarData: BarAreaData(
+                                    show: true,
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Colors.indigo.withValues(alpha: 0.25),
+                                        Colors.indigo.withValues(alpha: 0.05),
+                                      ],
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              extraLinesData: _buildExtraLines(),
+                            );
+                            return LineChart(data);
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -428,16 +584,25 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
           r"T(t) = T_a + (T_0 - T_a)\,e^{-kt}",
           textStyle: const TextStyle(fontSize: 16),
         ),
-        Math.tex(
-          r"\tau = \frac{1}{k},\quad t_{1/2}=\frac{\ln 2}{k},\quad t_{95\%}=\frac{\ln 20}{k}",
-          textStyle: const TextStyle(fontSize: 16),
-        ),
         const Divider(),
         Math.tex(
           "T(t) = ${ta.toStringAsFixed(2)} + (${t0.toStringAsFixed(2)} - ${ta.toStringAsFixed(2)}) e^{-${k.toStringAsFixed(3)} t}",
           textStyle: const TextStyle(fontSize: 16),
         ),
         const SizedBox(height: UIConstants.defaultSpacing),
+        Text('Definiciones', style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        const Text('• T(t): temperatura del objeto [°C]'),
+        const Text('• T₀: temperatura inicial del objeto [°C]'),
+        const Text('• Tₐ: temperatura ambiente constante [°C]'),
+        const Text('• k: coeficiente de enfriamiento [1/min], k > 0'),
+        const SizedBox(height: 8),
+        Text('Notas', style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        const Text('• Medio con Tₐ constante y sin fuentes internas de calor.'),
+        const Text('• k se asume constante (flujo de aire/entorno estable).'),
+        const Text('• Convección dominante y sin cambio de fase.'),
+        const Divider(),
         Wrap(
           spacing: UIConstants.defaultSpacing,
           runSpacing: UIConstants.defaultSpacing,
@@ -460,6 +625,44 @@ class _NewtonSimplePageState extends State<NewtonSimplePage> {
           ],
         ),
       ],
+    );
+  }
+
+  void _showNewtonInfo(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Definiciones – Ley de Enfriamiento'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text('Variables'),
+              SizedBox(height: 6),
+              Text('• T(t): temperatura del objeto [°C]'),
+              Text('• T₀: temperatura inicial [°C]'),
+              Text('• Tₐ: temperatura ambiente [°C]'),
+              Text('• k: coeficiente de enfriamiento [1/min], k > 0'),
+              SizedBox(height: 12),
+              Text('Ecuaciones'),
+              SizedBox(height: 6),
+              Text('dT/dt = −k (T − Tₐ)'),
+              Text('T(t) = Tₐ + (T₀ − Tₐ) e^{−k t}'),
+              SizedBox(height: 12),
+              Text('Supuestos'),
+              SizedBox(height: 6),
+              Text('• Tₐ constante; sin fuentes internas de calor.'),
+              Text('• k constante; entorno estable (flujo de aire).'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cerrar'),
+          )
+        ],
+      ),
     );
   }
 

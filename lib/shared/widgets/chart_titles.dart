@@ -10,6 +10,8 @@ class ChartTitlesConfig {
     double maxY, {
     double xMin = 0,
     required double xMax,
+    String? xAxisLabel,
+    String? yAxisLabel,
   }) {
     final ySpan = (maxY - minY).abs();
     final xStep = MathUtils.niceStep(spanX);
@@ -19,6 +21,17 @@ class ChartTitlesConfig {
       topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       leftTitles: AxisTitles(
+        axisNameWidget: yAxisLabel != null
+            ? Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  yAxisLabel,
+                  softWrap: false,
+                  overflow: TextOverflow.fade,
+                ),
+              )
+            : null,
+        axisNameSize: yAxisLabel != null ? 28 : 0,
         sideTitles: SideTitles(
           showTitles: true,
           reservedSize: 60,
@@ -42,6 +55,17 @@ class ChartTitlesConfig {
         ),
       ),
       bottomTitles: AxisTitles(
+        axisNameWidget: xAxisLabel != null
+            ? Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  xAxisLabel,
+                  softWrap: false,
+                  overflow: TextOverflow.fade,
+                ),
+              )
+            : null,
+        axisNameSize: xAxisLabel != null ? 28 : 0,
         sideTitles: SideTitles(
           showTitles: true,
           reservedSize: 36,

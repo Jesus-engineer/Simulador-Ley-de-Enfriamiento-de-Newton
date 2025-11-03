@@ -9,11 +9,13 @@ class DataCenterView extends StatefulWidget {
       required this.ambient,
       required this.temperature,
       this.steady,
-      this.powerWatts});
+      this.powerWatts,
+      this.rackCount = 3});
   final double ambient;
   final double temperature;
   final double? steady;
   final double? powerWatts;
+  final int rackCount;
 
   @override
   State<DataCenterView> createState() => _DataCenterViewState();
@@ -39,8 +41,15 @@ class _DataCenterViewState extends State<DataCenterView>
   Widget build(BuildContext context) {
     final t = widget.temperature;
     final s = widget.steady ?? (widget.ambient + 10);
-    // Pequeñas variaciones entre racks para dar naturalidad
-    final temps = [t - 1.5, t, t + 1.5];
+    // Variaciones entre racks para dar naturalidad (simétricas). Si es 1, sólo t.
+    final int n = widget.rackCount.clamp(1, 6);
+    final List<double> temps = List.generate(n, (i) {
+      if (n == 1) return t;
+      final double start = -1.5;
+      final double end = 1.5;
+      final double frac = n == 1 ? 0.5 : i / (n - 1);
+      return t + (start + (end - start) * frac);
+    });
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -91,7 +100,7 @@ class _DataCenterViewState extends State<DataCenterView>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: List.generate(3, (i) {
+                children: List.generate(temps.length, (i) {
                   return Flexible(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),

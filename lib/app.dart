@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../features/newton_cooling/newton_simple_page.dart';
 import '../features/server_simulation/server_example_page.dart';
+import '../features/share/share_dialog.dart';
 
 class MainApp extends StatefulWidget {
   const MainApp({super.key});
@@ -29,7 +30,16 @@ class _MainAppState extends State<MainApp> {
         ),
       ),
       home: Scaffold(
-        appBar: AppBar(title: const Text('Simulador de Enfriamiento')),
+        appBar: AppBar(
+          title: const Text('Simulador de Enfriamiento'),
+          actions: [
+            IconButton(
+              tooltip: 'Compartir',
+              icon: const Icon(Icons.share),
+              onPressed: () => ShareDialog.show(context),
+            ),
+          ],
+        ),
         body: IndexedStack(
           index: _index,
           children: const [NewtonSimplePage(), ServerExamplePage()],

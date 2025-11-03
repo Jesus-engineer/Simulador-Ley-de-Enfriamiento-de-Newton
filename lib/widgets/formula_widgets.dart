@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_math_fork/flutter_math.dart';
 
 class FormulaCard extends StatelessWidget {
   const FormulaCard({super.key, required this.title, required this.lines});

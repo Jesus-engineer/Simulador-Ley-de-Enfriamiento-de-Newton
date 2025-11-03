@@ -32,11 +32,26 @@ class FormulaCard extends StatelessWidget {
             ...lines.map(
               (w) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: w,
+                child: _wrapLine(w),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Wrap a single formula/line to prevent horizontal overflow.
+  /// Text widgets keep their natural wrapping; non-Text (e.g., Math widgets)
+  /// gain horizontal scrolling to avoid yellow/black overflow stripes.
+  Widget _wrapLine(Widget w) {
+    if (w is Text || w is SelectableText) return w;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [w],
       ),
     );
   }

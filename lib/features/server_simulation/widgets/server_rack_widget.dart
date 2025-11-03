@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 
 extension ColorExt on Color {
   Color withValues({int? red, int? green, int? blue, double? alpha}) {
+  final curA = (a * 255).round();
+  final curR = (r * 255).round();
+  final curG = (g * 255).round();
+  final curB = (b * 255).round();
     return Color.fromARGB(
-      (alpha != null ? (alpha * 255).round() : this.alpha),
-      red ?? this.red,
-      green ?? this.green,
-      blue ?? this.blue,
+      alpha != null ? (alpha * 255).round() : curA,
+      red ?? curR,
+      green ?? curG,
+      blue ?? curB,
     );
   }
 }
