@@ -11,6 +11,16 @@ import '../../shared/widgets/section_card.dart';
 import 'widgets/datacenter_view.dart';
 // import 'widgets/server_rack_widget.dart';
 
+// Segmento simple para definir tramos del escenario dinámico
+class _Segment {
+  const _Segment(this.start, this.end, this.P, this.hA, this.name);
+  final double start; // min
+  final double end;   // min
+  final double P;     // W
+  final double hA;    // W/°C
+  final String name;  // etiqueta
+}
+
 class ServerExamplePage extends StatefulWidget {
   const ServerExamplePage({super.key});
 
@@ -36,6 +46,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
   bool _running = false;
   double _speed = TemperatureConstants.defaultSimulationSpeed;
   Timer? _timer;
+  bool _dynamicScenario = true; // Activado por defecto
 
   // Controllers for input fields
   final t0C = TextEditingController(
@@ -57,17 +68,61 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
     text: TemperatureConstants.presets['server']!['duration']!.toString(),
   );
 
-  /// Calculates server temperature at time t
+  /// Calculates server temperature at time t (caso constante)
   double temp(double t) =>
       ta +
       (t0 - ta - q / (k == 0 ? 1 : k)) * math.exp(-k * t) +
       (k == 0 ? 0 : q / k);
 
-  /// Generates data points for temperature curve
-  List<FlSpot> series(int n) => List.generate(n + 1, (i) {
-        final x = duration * i / n;
-        return FlSpot(x, temp(x));
-      });
+  // Tramos del escenario dinámico (puedes ajustar tiempos/valores)
+  List<_Segment> get _segments => [
+        _Segment(0, 10, 150, 80, 'A'),
+        _Segment(10, 25, 420, 50, 'B'),
+        _Segment(25, 40, 220, 70, 'C'),
+        _Segment(40, duration, 280, 54, 'D'),
+      ];
+
+  ({double P, double hA}) _scenarioAt(double t) {
+    for (final s in _segments) {
+      if (t >= s.start && t < s.end) return (P: s.P, hA: s.hA);
+    }
+    final last = _segments.last;
+    return (P: last.P, hA: last.hA);
+  }
+
+  double _steadyFor(double P, double hA) => ta + (hA > 0 ? P / hA : 0);
+
+  /// Serie con P(t), hA(t) variables usando integración de Euler
+  List<FlSpot> _seriesDynamic(int n) {
+    final List<FlSpot> pts = [];
+    final dtMax = (duration / n).clamp(0.001, 1e9);
+    double T = t0;
+    double t = 0;
+    pts.add(FlSpot(0, T));
+    for (int i = 1; i <= n; i++) {
+      t = duration * i / n;
+      double cur = pts.last.x;
+      while (cur < t - 1e-9) {
+        final step = math.min(dtMax, t - cur);
+        final seg = _scenarioAt(cur);
+        final kVar = (seg.hA / C) * 60.0; // 1/min
+        final qVar = (seg.P / C) * 60.0;  // °C/min
+        final dTdt = -kVar * (T - ta) + qVar;
+        T += dTdt * step;
+        cur += step;
+      }
+      pts.add(FlSpot(t, T));
+    }
+    return pts;
+  }
+
+  /// Generates data points for temperature curve (dinámico o constante)
+  List<FlSpot> series(int n) => _dynamicScenario
+      ? _seriesDynamic(n)
+      : List.generate(n + 1, (i) {
+          final x = duration * i / n;
+          return FlSpot(x, temp(x));
+        });
 
   /// Applies new values from input fields with validation
   void apply() {
@@ -149,14 +204,28 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
 
   @override
   Widget build(BuildContext context) {
-    final steady = ta + (hA > 0 ? P / hA : 0);
-    final currentT = temp(tMarker);
-    final minY =
-        [temp(0), temp(duration), ta, steady].reduce((a, b) => math.min(a, b)) -
-            ChartConstants.chartPadding;
-    final maxY =
-        [temp(0), temp(duration), ta, steady].reduce((a, b) => math.max(a, b)) +
-            ChartConstants.chartPadding;
+    final pts = series(TemperatureConstants.chartDataPoints);
+    final steady = _dynamicScenario
+        ? _steadyFor(_scenarioAt(duration).P, _scenarioAt(duration).hA)
+        : ta + (hA > 0 ? P / hA : 0);
+    double valueAt(double x) {
+      if (pts.isEmpty) return t0;
+      if (x <= pts.first.x) return pts.first.y;
+      if (x >= pts.last.x) return pts.last.y;
+      for (int i = 0; i < pts.length - 1; i++) {
+        final a = pts[i];
+        final b = pts[i + 1];
+        if (x >= a.x && x <= b.x) {
+          final r = (x - a.x) / (b.x - a.x);
+          return a.y + (b.y - a.y) * r;
+        }
+      }
+      return pts.last.y;
+    }
+    final currentT = valueAt(tMarker);
+    final values = [for (final p in pts) p.y, ta, steady];
+    final minY = values.reduce(math.min) - ChartConstants.chartPadding;
+    final maxY = values.reduce(math.max) + ChartConstants.chartPadding;
 
     return Padding(
       padding: const EdgeInsets.all(UIConstants.defaultPadding),
@@ -170,6 +239,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
             isWide: isWide,
             chartHeight: chartHeight,
             steady: steady,
+            points: pts,
             currentT: currentT,
             minY: minY,
             maxY: maxY,
@@ -183,6 +253,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
     required bool isWide,
     required double chartHeight,
     required double steady,
+    required List<FlSpot> points,
     required double currentT,
     required double minY,
     required double maxY,
@@ -190,6 +261,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
     final content = _buildMainContent(
       chartHeight: chartHeight,
       steady: steady,
+      points: points,
       currentT: currentT,
       minY: minY,
       maxY: maxY,
@@ -206,6 +278,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
   Widget _buildMainContent({
     required double chartHeight,
     required double steady,
+    required List<FlSpot> points,
     required double currentT,
     required double minY,
     required double maxY,
@@ -221,6 +294,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
             minY: minY,
             maxY: maxY,
             steady: steady,
+            points: points,
           ),
           // Servidores inmediatamente debajo de la gráfica
           const SizedBox(height: 12),
@@ -307,6 +381,14 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
             runSpacing: 12,
             children: [
               Chip(label: Text('T∞ ≈ ${steady.toStringAsFixed(2)} °C')),
+              FilterChip(
+                selected: _dynamicScenario,
+                label: const Text('Escenario dinámico'),
+                onSelected: (v) => setState(() {
+                  _dynamicScenario = v;
+                  tMarker = 0; // reinicia el marcador para ver el efecto desde el inicio
+                }),
+              ),
             ],
           ),
         ],
@@ -319,11 +401,13 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
     required double minY,
     required double maxY,
     required double steady,
+    required List<FlSpot> points,
   }) {
     final data = _createChartData(
       minY: minY,
       maxY: maxY,
       steady: steady,
+      points: points,
     );
 
     return SizedBox(
@@ -364,6 +448,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
     required double minY,
     required double maxY,
     required double steady,
+    required List<FlSpot> points,
   }) {
     return LineChartData(
       minX: -(math.max(0.5, duration * ChartConstants.chartMarginPercent)),
@@ -411,7 +496,7 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
       ),
       lineBarsData: [
         LineChartBarData(
-          spots: series(TemperatureConstants.chartDataPoints),
+          spots: points,
           isCurved: true,
           color: Colors.blue,
           barWidth: 3,
@@ -448,7 +533,12 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
       builder: (ctx) {
         final size = MediaQuery.of(ctx).size;
         final h = size.height * 0.9;
-        final data = _createChartData(minY: minY, maxY: maxY, steady: steady);
+        final data = _createChartData(
+          minY: minY,
+          maxY: maxY,
+          steady: steady,
+          points: series(TemperatureConstants.chartDataPoints),
+        );
         return SafeArea(
           top: false,
           child: SizedBox(
@@ -495,38 +585,77 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
   }
 
   ExtraLinesData _buildExtraLines(double steady) {
+    final horizontals = <HorizontalLine>[
+      HorizontalLine(
+        y: ta,
+        color: Colors.teal,
+        dashArray: const [6, 4],
+        label: HorizontalLineLabel(
+          show: true,
+          labelResolver: (_) => 'Tₐ ${ta.toStringAsFixed(1)}°C',
+        ),
+      ),
+      HorizontalLine(
+        y: steady,
+        color: Colors.orangeAccent,
+        dashArray: const [6, 4],
+        label: HorizontalLineLabel(
+          // Hide global T∞ label text
+          show: false,
+          labelResolver: (_) => 'T∞ ${steady.toStringAsFixed(1)}°C',
+        ),
+      ),
+    ];
+    final verticals = <VerticalLine>[
+      VerticalLine(
+        x: tMarker,
+        color: Colors.orange,
+        dashArray: const [6, 4],
+        label: VerticalLineLabel(
+          show: true,
+          labelResolver: (_) => 't = ${tMarker.toStringAsFixed(1)} min',
+        ),
+      ),
+    ];
+
+    if (_dynamicScenario) {
+      for (final s in _segments) {
+        // Línea de T∞ del tramo
+        final tinf = _steadyFor(s.P, s.hA);
+        horizontals.add(
+          HorizontalLine(
+            y: tinf,
+            color: Colors.blueGrey.withValues(alpha: 0.45),
+            dashArray: const [4, 4],
+            label: HorizontalLineLabel(
+              // Hide per-segment T∞ labels
+              show: false,
+              alignment: Alignment.centerLeft,
+              labelResolver: (_) => 'T∞${s.name} ${tinf.toStringAsFixed(1)}°C',
+            ),
+          ),
+        );
+        // Marcador vertical en fin de tramo (si está dentro de la duración)
+        if (s.end < duration - 1e-6) {
+          verticals.add(
+            VerticalLine(
+              x: s.end,
+              color: Colors.blueGrey.withValues(alpha: 0.55),
+              dashArray: const [2, 4],
+              // Hide P/hA label per user request; keep the vertical marker without text.
+              label: VerticalLineLabel(
+                show: false,
+                alignment: Alignment.topRight,
+              ),
+            ),
+          );
+        }
+      }
+    }
+
     return ExtraLinesData(
-      horizontalLines: [
-        HorizontalLine(
-          y: ta,
-          color: Colors.teal,
-          dashArray: const [6, 4],
-          label: HorizontalLineLabel(
-            show: true,
-            labelResolver: (_) => 'Tₐ ${ta.toStringAsFixed(1)}°C',
-          ),
-        ),
-        HorizontalLine(
-          y: steady,
-          color: Colors.orangeAccent,
-          dashArray: const [6, 4],
-          label: HorizontalLineLabel(
-            show: true,
-            labelResolver: (_) => 'T∞ ${steady.toStringAsFixed(1)}°C',
-          ),
-        ),
-      ],
-      verticalLines: [
-        VerticalLine(
-          x: tMarker,
-          color: Colors.orange,
-          dashArray: const [6, 4],
-          label: VerticalLineLabel(
-            show: true,
-            labelResolver: (_) => 't = ${tMarker.toStringAsFixed(1)} min',
-          ),
-        ),
-      ],
+      horizontalLines: horizontals,
+      verticalLines: verticals,
     );
   }
 
@@ -622,11 +751,6 @@ class _ServerExamplePageState extends State<ServerExamplePage> {
         const Text('• k = hA/C [1/min], q = P/C [°C/min]'),
         const Text('• T∞ = Tₐ + P/hA [°C] (equilibrio)'),
         const SizedBox(height: 8),
-        Text('Notas', style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        const Text('• Tₐ y P constantes durante el intervalo.'),
-        const Text('• Propiedades térmicas (C, hA) constantes.'),
-        const Text('• No se incluye radiación de forma explícita.'),
         const Divider(),
         Wrap(
           spacing: UIConstants.defaultSpacing,
