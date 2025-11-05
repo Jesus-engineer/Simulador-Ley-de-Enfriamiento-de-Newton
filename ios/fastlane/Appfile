@@ -1,0 +1,5 @@
+# fastlane configuration for iOS
+# Values are injected via environment variables by CI
+app_identifier(ENV['IOS_APP_BUNDLE_ID'] || 'com.example.app')
+apple_id(ENV['IOS_APPLE_ID'] || 'appleid@example.com')
+team_id(ENV['IOS_TEAM_ID'] || '')

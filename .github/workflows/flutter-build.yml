@@ -1,0 +1,57 @@
+name: Build Android APK and iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  android:
+    name: Android APK (release)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: stable
+          channel: stable
+      - name: Flutter pub get
+        run: flutter pub get
+      - name: Build APK (release)
+        run: flutter build apk --release
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  ios:
+    name: iOS IPA (unsigned release)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: stable
+          channel: stable
+      - name: Enable CocoaPods repo (performance)
+        run: |
+          pod repo update
+      - name: Flutter pub get
+        run: flutter pub get
+      - name: Build unsigned IPA (release)
+        # This produces an unsigned .ipa suitable for distribution once signed via Xcode/App Store Connect
+        run: flutter build ipa --release --no-codesign
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-unsigned
+          path: |
+            build/ios/ipa/*.ipa
+            build/ios/archive/*.xcarchive
