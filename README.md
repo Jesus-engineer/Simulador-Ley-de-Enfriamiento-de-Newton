@@ -1,4 +1,5 @@
 # Simulador-Ley-de-Enfriamiento-de-Newton
+<<<<<<< HEAD
 
 ## Builds: Android APK y iOS IPA
 
@@ -46,3 +47,5 @@ Si prefieres compilar localmente en un Mac:
 Notas:
 - Un `.apk` solo funciona en Android. En iPhone necesitas `.ipa` y firma válida de Apple.
 - El modo TestFlight es la ruta más simple para probar en iPhone sin cables.
+=======
+>>>>>>> ae54f78 (Despliegue con vercer)
