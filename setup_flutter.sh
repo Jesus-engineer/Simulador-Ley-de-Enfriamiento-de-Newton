@@ -1,12 +1,8 @@
 #!/bin/bash
-# Instalar Flutter SDK temporalmente en Vercel
-echo "🚀 Instalando Flutter SDK..."
-git clone https://github.com/flutter/flutter.git --depth 1
+# Instalar Flutter y compilar la app para web
+
+curl -O https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.3-stable.tar.xz
+tar xf flutter_linux_3.24.3-stable.tar.xz
 export PATH="$PATH:`pwd`/flutter/bin"
-
-# Verificar instalación
-flutter --version
-
-# Descargar dependencias
-echo "📦 Instalando dependencias..."
-flutter pub get
+flutter config --enable-web
+flutter build web --release
