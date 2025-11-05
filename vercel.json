@@ -1,5 +1,10 @@
 {
-  "buildCommand": "bash setup_flutter.sh && flutter build web",
-  "outputDirectory": "build/web",
-  "framework": "none"
+  "builds": [
+    {
+      "src": "setup_flutter.sh",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "build/web" }
+    }
+  ],
+  "routes": [{ "src": "/(.*)", "dest": "/$1" }]
 }
