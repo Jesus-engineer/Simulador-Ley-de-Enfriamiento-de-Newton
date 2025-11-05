@@ -1,10 +1,4 @@
 {
-  "builds": [
-    {
-      "src": "setup_flutter.sh",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "build/web" }
-    }
-  ],
-  "routes": [{ "src": "/(.*)", "dest": "/$1" }]
+  "builds": [{ "src": "build/web/**/*", "use": "@vercel/static" }],
+  "routes": [{ "src": "/(.*)", "dest": "/index.html" }]
 }
