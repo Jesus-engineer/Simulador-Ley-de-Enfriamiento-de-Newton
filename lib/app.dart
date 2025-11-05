@@ -12,13 +12,21 @@ class MainApp extends StatefulWidget {
 
 class _MainAppState extends State<MainApp> {
   int _index = 0;
+  // Tema: permite cambiar el color semilla para dar una identidad visual
+  final List<MaterialColor> _seedOptions = const [
+    Colors.indigo,
+    Colors.teal,
+    Colors.deepPurple,
+  ];
+  int _themeIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Simulador – Ley de Enfriamiento de Newton',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        colorScheme: ColorScheme.fromSeed(seedColor: _seedOptions[_themeIndex]),
         useMaterial3: true,
         inputDecorationTheme: const InputDecorationTheme(
           floatingLabelStyle: TextStyle(
@@ -33,6 +41,26 @@ class _MainAppState extends State<MainApp> {
         appBar: AppBar(
           title: const Text('Simulador de Enfriamiento'),
           actions: [
+            // Selector rápido de color del tema
+            PopupMenuButton<int>(
+              tooltip: 'Tema',
+              icon: const Icon(Icons.palette_outlined),
+              onSelected: (i) => setState(() => _themeIndex = i),
+              itemBuilder: (ctx) => [
+                PopupMenuItem(
+                  value: 0,
+                  child: _ThemeOption(color: _seedOptions[0], label: 'Indigo'),
+                ),
+                PopupMenuItem(
+                  value: 1,
+                  child: _ThemeOption(color: _seedOptions[1], label: 'Turquesa'),
+                ),
+                PopupMenuItem(
+                  value: 2,
+                  child: _ThemeOption(color: _seedOptions[2], label: 'Morado'),
+                ),
+              ],
+            ),
             IconButton(
               tooltip: 'Compartir',
               icon: const Icon(Icons.share),
@@ -53,6 +81,30 @@ class _MainAppState extends State<MainApp> {
           onDestinationSelected: (i) => setState(() => _index = i),
         ),
       ),
+    );
+  }
+}
+
+class _ThemeOption extends StatelessWidget {
+  const _ThemeOption({required this.color, required this.label});
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(label),
+      ],
     );
   }
 }
