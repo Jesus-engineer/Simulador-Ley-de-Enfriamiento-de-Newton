@@ -13,23 +13,31 @@ class MainApp extends StatefulWidget {
 class _MainAppState extends State<MainApp> {
   int _index = 0;
 
+  static const _pages = [NewtonSimplePage(), ServerExamplePage()];
+  static const _destinations = [
+    NavigationDestination(icon: Icon(Icons.functions), label: 'Ley'),
+    NavigationDestination(icon: Icon(Icons.dns), label: 'Servidor'),
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final theme = ThemeData(
+      colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+      useMaterial3: true,
+      inputDecorationTheme: const InputDecorationTheme(
+        floatingLabelStyle: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: Colors.black87,
+        ),
+        labelStyle: TextStyle(fontSize: 16, color: Colors.black87),
+      ),
+    );
+
     return MaterialApp(
       title: 'Simulador – Ley de Enfriamiento de Newton',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-        inputDecorationTheme: const InputDecorationTheme(
-          floatingLabelStyle: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-          labelStyle: TextStyle(fontSize: 16, color: Colors.black87),
-        ),
-      ),
+      theme: theme,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Simulador de Enfriamiento'),
@@ -43,14 +51,11 @@ class _MainAppState extends State<MainApp> {
         ),
         body: IndexedStack(
           index: _index,
-          children: const [NewtonSimplePage(), ServerExamplePage()],
+          children: _pages,
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.functions), label: 'Ley'),
-            NavigationDestination(icon: Icon(Icons.dns), label: 'Servidor'),
-          ],
+          destinations: _destinations,
           onDestinationSelected: (i) => setState(() => _index = i),
         ),
       ),
